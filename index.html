@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070b16">
+  <meta name="description" content="MASTER PRO AI — análise estatística experimental de roleta.">
+  <title>MASTER PRO AI</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./assets/icons/icon-192.png">
+  <link rel="stylesheet" href="./assets/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+</head>
+
+<body>
+  <div class="app">
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">M</div>
+        <strong>MASTER PRO <span>AI</span></strong>
+      </div>
+      <div class="connection" id="connectionStatus"><i></i> Conectando</div>
+    </header>
+
+    <main class="layout">
+
+      <!-- TELA PRINCIPAL: palpites + entrada + teclado, tudo junto -->
+      <section class="cockpit panel" aria-label="Palpites e entrada de resultado">
+
+        <div class="sug-head">
+          <h2>Palpites <em>experimental</em></h2>
+          <span>baseado no passado</span>
+        </div>
+
+        <div class="sug-grid" id="suggestionsGrid">
+          <article class="sug-card sug-empty">
+            <small>PALPITES</small>
+            <strong>—</strong>
+            <span>Carregando…</span>
+          </article>
+        </div>
+
+        <div class="entry-row">
+          <div class="number-box">
+            <div class="number-display" id="numberDisplay" aria-live="polite">—</div>
+            <button type="button" class="clear-btn" id="clearSelection"
+                    aria-label="Limpar número">✕</button>
+          </div>
+          <div class="recent-strip" id="recentStrip" aria-label="Últimos resultados"></div>
+        </div>
+
+        <p class="msg" id="entryMessage" role="status">Digite o número que saiu.</p>
+
+        <div class="pad" id="numberPad" aria-label="Teclado numérico">
+          <button type="button" class="key" data-digit="1">1</button>
+          <button type="button" class="key" data-digit="2">2</button>
+          <button type="button" class="key" data-digit="3">3</button>
+          <button type="button" class="key" data-digit="4">4</button>
+          <button type="button" class="key" data-digit="5">5</button>
+          <button type="button" class="key" data-digit="6">6</button>
+          <button type="button" class="key" data-digit="7">7</button>
+          <button type="button" class="key" data-digit="8">8</button>
+          <button type="button" class="key" data-digit="9">9</button>
+          <button type="button" class="key key-del" id="backspaceNumber"
+                  aria-label="Apagar último dígito">⌫</button>
+          <button type="button" class="key key-zero" data-digit="0">0</button>
+          <button type="button" class="key key-ok" id="saveNumber" disabled
+                  aria-label="Inserir resultado">✓</button>
+        </div>
+
+        <p class="fineprint">
+          Cada giro é independente: frequências e atrasos descrevem o passado,
+          não garantem o próximo resultado.
+        </p>
+      </section>
+
+      <!-- DETALHES: rolar para ver -->
+      <div class="details">
+
+        <section class="panel" id="learningWarning" hidden>
+          <p class="warning">
+            Tabela de aprendizado não encontrada. Rode o arquivo
+            <code>supabase/setup-aprendizado.sql</code> no SQL Editor do Supabase.
+            Enquanto isso os palpites usam só a estratégia de frequência.
+          </p>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">ANÁLISE</p>
+              <h2>Resumo estatístico</h2>
+            </div>
+            <span class="subtle" id="summaryWindow">—</span>
+          </div>
+
+          <div class="analysis-grid">
+            <div class="analysis-block">
+              <h3>Mais frequentes</h3>
+              <div id="hotNumbers" class="rank-list"></div>
+            </div>
+
+            <div class="analysis-block">
+              <h3>Mais atrasados</h3>
+              <div id="coldNumbers" class="rank-list"></div>
+            </div>
+
+            <div class="analysis-block">
+              <h3>Cor</h3>
+              <div id="colorStats" class="distribution"></div>
+            </div>
+
+            <div class="analysis-block">
+              <h3>Paridade e faixa</h3>
+              <div id="rangeStats" class="distribution"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">MODELO EXPERIMENTAL</p>
+              <h2>Hipótese numérica</h2>
+            </div>
+            <span class="tag">BACKTEST</span>
+          </div>
+
+          <div class="forecast-content">
+            <div class="forecast-number" id="forecastNumber">—</div>
+
+            <div class="forecast-details">
+              <strong id="forecastTitle">Aguardando histórico</strong>
+              <div class="forecast-metrics">
+                <span>Cor <b id="forecastColor">—</b></span>
+                <span>Faixa <b id="forecastRange">—</b></span>
+                <span>Paridade <b id="forecastParity">—</b></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="learning-row">
+            <div><small>AVALIADAS</small><strong id="evaluatedCount">0</strong></div>
+            <div><small>ACERTO EXATO</small><strong id="exactRate">—</strong></div>
+            <div><small>ACERTO DE COR</small><strong id="colorRate">—</strong></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">LINHA DO TEMPO</p>
+              <h2>Últimos resultados</h2>
+            </div>
+            <button class="btn-small" id="refreshData" type="button">Atualizar</button>
+          </div>
+
+          <div id="recentResults" class="recent-results"></div>
+          <p class="fineprint" id="updatedAt">—</p>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">SESSÃO</p>
+              <h2>Dados do sistema</h2>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <article class="stat-card">
+              <small>TOTAL NO BANCO</small>
+              <strong id="statTotal">—</strong>
+            </article>
+            <article class="stat-card">
+              <small>NESTA SESSÃO</small>
+              <strong id="statSession">0</strong>
+            </article>
+            <article class="stat-card">
+              <small>ÚLTIMO</small>
+              <strong id="statLast">—</strong>
+              <span id="statLastMeta">—</span>
+            </article>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <footer>MASTER PRO AI · estatística experimental · v3.0</footer>
+  </div>
+
+  <script src="./assets/js/config.js"></script>
+  <script src="./assets/js/supabase.js"></script>
+  <script src="./assets/js/analysis.js"></script>
+  <script src="./assets/js/app.js"></script>
+</body>
+</html>

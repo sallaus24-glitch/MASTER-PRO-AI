@@ -1,0 +1,21 @@
+{
+  "name": "MASTER PRO AI",
+  "short_name": "MASTER PRO",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#090d1b",
+  "theme_color": "#090d1b",
+  "description": "Histórico e análise estatística de roleta.",
+  "icons": [
+    {
+      "src": "./assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
