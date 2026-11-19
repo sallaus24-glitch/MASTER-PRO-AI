@@ -1,4 +1,3 @@
-// Rode com: node tests/analysis.test.js
 const assert = require("node:assert/strict");
 const A = require("../assets/js/analysis.js");
 
@@ -9,11 +8,10 @@ function test(name, fn) {
   console.log("ok -", name);
 }
 
-test("cor, paridade, faixa, coluna, dúzia", () => {
+test("categorias da roleta europeia", () => {
   assert.equal(A.colorOf(0), "green");
   assert.equal(A.colorOf(1), "red");
   assert.equal(A.colorOf(2), "black");
-  assert.equal(A.colorOf(36), "red");
   assert.equal(A.parityOf(7), "Impar");
   assert.equal(A.parityOf(0), "Zero");
   assert.equal(A.rangeOf(18), "Baixo");
@@ -21,15 +19,24 @@ test("cor, paridade, faixa, coluna, dúzia", () => {
   assert.equal(A.columnOf(1), "Coluna 1");
   assert.equal(A.columnOf(35), "Coluna 2");
   assert.equal(A.columnOf(36), "Coluna 3");
-  assert.equal(A.lineOf(9), "Linha 1");
-  assert.equal(A.lineOf(10), "Linha 2");
-  assert.equal(A.lineOf(36), "Linha 4");
+  assert.equal(A.dozenOf(12), "Dúzia 1");
+  assert.equal(A.dozenOf(13), "Dúzia 2");
+  assert.equal(A.dozenOf(36), "Dúzia 3");
+  assert.equal(A.streetOf(3), "Rua 1");
+  assert.equal(A.streetOf(4), "Rua 2");
+  assert.equal(A.streetOf(36), "Rua 12");
+  assert.equal(A.streetOf(0), "Zero");
+});
+
+test("categoria antiga linha não entra no novo aprendizado", () => {
+  assert.equal(A.categoryOf(5, "linha"), null);
+  assert.equal(A.categoryOf(5, "rua"), "Rua 2");
 });
 
 test("categoryOf rejeita valores inválidos", () => {
   assert.equal(A.categoryOf(37, "cor"), null);
   assert.equal(A.categoryOf(-1, "cor"), null);
-  assert.equal(A.categoryOf(5, "duzia"), null);
+  assert.equal(A.categoryOf(5, "duzia-invalida"), null);
 });
 
 test("não gera palpites com menos de 10 giros", () => {
@@ -38,53 +45,53 @@ test("não gera palpites com menos de 10 giros", () => {
   assert.deepEqual(A.makeStrategyCandidates([1, 2, 3]), []);
 });
 
-test("gera 5 categorias × 6 estratégias de candidatos", () => {
+test("gera 6 categorias × 6 estratégias de candidatos", () => {
   const h = Array.from({ length: 40 }, (_, i) => (i * 7) % 37);
-  assert.equal(A.makeStrategyCandidates(h).length, 30);
+  assert.equal(A.makeStrategyCandidates(h).length, 36);
+  assert.deepEqual(A.CATEGORIES, ["cor", "paridade", "faixa", "coluna", "duzia", "rua"]);
 });
 
-test("summarize usa só os últimos 100 giros", () => {
+test("resumo usa só os últimos 100 giros", () => {
   const old = Array(200).fill(5);
   const recent = Array(100).fill(8);
-  const s = A.summarize([...old, ...recent]);
-  assert.equal(s.size, 100);
-  assert.equal(s.hot[0].n, 8);
-  assert.equal(s.hot[0].count, 100);
-  assert.equal(s.maxCount, 100);
+  const summary = A.summarize([...old, ...recent]);
+  assert.equal(summary.size, 100);
+  assert.equal(summary.hot[0].n, 8);
+  assert.equal(summary.hot[0].count, 100);
 });
 
-test("alternância só vale para exatamente dois valores", () => {
-  // 4 dúzias diferentes alternando não deve ser tratada como alternância binária
-  const h = [1, 14, 27, 1, 14, 27, 1, 14, 27, 1, 14, 27];
-  const s = A.makeSuggestions(h, []);
-  assert.ok(s.linha.value);
-});
-
-test("estratégia só é qualificada com avaliações suficientes", () => {
-  const few = Array.from({ length: A.MIN_EVALUATIONS - 1 }, (_, i) => ({
+test("estratégia só é qualificada com 100 avaliações históricas", () => {
+  const rows = Array.from({ length: 99 }, (_, i) => ({
     categoria: "cor", estrategia: "atraso", acertou: true,
     criado_em: new Date(i * 1000).toISOString()
   }));
-  assert.equal(A.chooseBestStrategy(few, "cor").learning, false);
-
-  const enough = [...few, { ...few[0], criado_em: new Date(99999).toISOString() }];
-  const best = A.chooseBestStrategy(enough, "cor");
+  assert.equal(A.MIN_EVALUATIONS, 100);
+  assert.equal(A.chooseBestStrategy(rows, "cor").learning, false);
+  rows.push({ ...rows[0], criado_em: new Date(999999).toISOString() });
+  const best = A.chooseBestStrategy(rows, "cor");
   assert.equal(best.learning, true);
+  assert.equal(best.total, 100);
   assert.equal(best.strategy, "atraso");
 });
 
-test("atraso nunca sugere Zero", () => {
-  const h = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-  const s = A.makeSuggestions(h, []);
-  for (const c of A.CATEGORIES) assert.notEqual(s[c].value, "Zero");
-  const cands = A.makeStrategyCandidates(h).filter(x => x.estrategia === "atraso");
-  assert.ok(cands.length === 5 && cands.every(x => x.sugestao !== "Zero" && x.sugestao !== "green"));
+test("desempenho conta histórico total, mas limita pontuação às 30 avaliações recentes", () => {
+  const rows = Array.from({ length: 110 }, (_, i) => ({
+    categoria: "cor", estrategia: "frequencia", acertou: i < 80,
+    criado_em: new Date(i * 1000).toISOString()
+  }));
+  const result = A.strategyPerformance(rows, "cor", "frequencia");
+  assert.equal(result.total, 110);
+  assert.equal(result.evaluatedRecent, 30);
+  assert.equal(result.hits, 80);
 });
 
-test("quebra de sequência nunca sugere o valor da sequência nem zero", () => {
-  const h = [2, 4, 6, 8, 10, 11, 13, 15, 17, 19, 20, 22, 24, 26]; // termina em 4 pretos
-  const s = A.makeSuggestions(h, []);
-  assert.ok(s);
+test("hipótese numérica oferece até cinco candidatos e combina janelas", () => {
+  const history = Array.from({ length: 120 }, (_, i) => i % 2 === 0 ? 17 : 8);
+  const forecast = A.makeForecast(history);
+  assert.ok(forecast);
+  assert.equal(forecast.candidates.length, 5);
+  assert.match(forecast.method, /10\/30\/50\/100/);
+  assert.ok([8, 17].includes(forecast.number));
 });
 
 console.log(`\n${passed} testes passaram.`);

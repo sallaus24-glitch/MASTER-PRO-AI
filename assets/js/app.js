@@ -262,13 +262,19 @@
 
     const hits = [];
     const misses = [];
+    const evaluatedAt = new Date().toISOString();
 
     for (const prediction of data) {
       const actual = Analysis.categoryOf(real, prediction.categoria);
 
-      // Categoria desconhecida (ex.: antiga "linha"): descarta como erro neutro.
+      // "linha" é legado. Fecha o registro sem acerto/erro para não contaminar métricas.
       if (actual === null) {
-        misses.push(prediction.id);
+        const { error: legacyError } = await db
+          .from("aprendizado_estrategias")
+          .update({ resultado_real: real, avaliado_em: evaluatedAt })
+          .eq("id", prediction.id)
+          .is("resultado_real", null);
+        if (legacyError) throw legacyError;
         continue;
       }
 
@@ -278,8 +284,6 @@
         misses.push(prediction.id);
       }
     }
-
-    const evaluatedAt = new Date().toISOString();
 
     for (const [ids, acertou] of [[hits, true], [misses, false]]) {
       if (!ids.length) continue;
@@ -436,14 +440,15 @@
       ["PARIDADE", suggestions.paridade, null],
       ["ALTO/BAIXO", suggestions.faixa, null],
       ["COLUNA", suggestions.coluna, null],
-      ["LINHA", suggestions.linha, null]
+      ["DÚZIA", suggestions.duzia, null],
+      ["RUA", suggestions.rua, null]
     ];
 
     el.innerHTML = cards.map(([title, item, colorValue]) => {
       const tone = colorValue ? ` tone-${colorValue}` : "";
       const meta = item.learning
-        ? `${item.count}/${item.total} · ${item.pct}`
-        : "provisório";
+        ? `${item.count}/${item.total} hist. · ${item.pct} rec.`
+        : "em observação";
 
       return `
         <article class="sug-card${tone}" title="Estratégia: ${item.strategyLabel}">
@@ -465,13 +470,14 @@
 
     if ($("forecastTitle")) {
       $("forecastTitle").textContent = f
-        ? "Mais frequente nos últimos 30"
+        ? f.method
         : "Aguardando histórico";
     }
 
     if ($("forecastColor")) $("forecastColor").textContent = f ? Analysis.colorLabel(f.color) : "—";
     if ($("forecastRange")) $("forecastRange").textContent = f ? f.range : "—";
     if ($("forecastParity")) $("forecastParity").textContent = f ? f.parity : "—";
+    if ($("forecastCandidates")) $("forecastCandidates").textContent = f ? `Outros candidatos do histórico: ${f.candidates.slice(1).join(", ")}` : "";
   }
 
   function renderNumericStats(stats) {

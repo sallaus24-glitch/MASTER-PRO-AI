@@ -3,11 +3,11 @@
 
   // Mínimo de avaliações para uma estratégia ser considerada "qualificada".
   // Com poucas amostras, o desempenho é praticamente sorte.
-  const MIN_EVALUATIONS = 20;
+  const MIN_EVALUATIONS = 100;
   const MAX_RECENT_EVALUATIONS = 30;
   const SUMMARY_WINDOW = 100;
 
-  const CATEGORIES = ["cor", "paridade", "faixa", "coluna", "linha"];
+  const CATEGORIES = ["cor", "paridade", "faixa", "coluna", "duzia", "rua"];
 
   const STRATEGIES = [
     "frequencia",
@@ -37,7 +37,8 @@
     paridade: ["Par", "Impar", "Zero"],
     faixa: ["Baixo", "Alto", "Zero"],
     coluna: ["Coluna 1", "Coluna 2", "Coluna 3", "Zero"],
-    linha: ["Linha 1", "Linha 2", "Linha 3", "Linha 4", "Zero"]
+    duzia: ["Dúzia 1", "Dúzia 2", "Dúzia 3", "Zero"],
+    rua: Array.from({ length: 12 }, (_, i) => `Rua ${i + 1}`).concat("Zero")
   };
 
   function normalizeHistory(history) {
@@ -74,8 +75,18 @@
     return `Coluna ${((n - 1) % 3) + 1}`;
   }
 
-  // Mantida como no banco: 4 grupos de 9 números (a tabela
-  // aprendizado_estrategias só aceita a categoria "linha").
+  function dozenOf(number) {
+    const n = Number(number);
+    if (n === 0) return "Zero";
+    return `Dúzia ${Math.ceil(n / 12)}`;
+  }
+
+  function streetOf(number) {
+    const n = Number(number);
+    if (n === 0) return "Zero";
+    return `Rua ${Math.ceil(n / 3)}`;
+  }
+
   function lineOf(number) {
     const n = Number(number);
     if (n === 0) return "Zero";
@@ -92,7 +103,9 @@
       case "paridade": return parityOf(n);
       case "faixa": return rangeOf(n);
       case "coluna": return columnOf(n);
-      case "linha": return lineOf(n);
+      case "duzia": return dozenOf(n);
+      case "rua": return streetOf(n);
+      case "linha": return null; // legado, não participa do novo aprendizado
       default: return null;
     }
   }
@@ -120,9 +133,11 @@
     const allowed = pool || VALID_VALUES[category] || [];
     const counts = countValues(values);
 
+    const lastSeen = {};
+    values.forEach((value, index) => { lastSeen[value] = index; });
     return allowed
-      .map((value, index) => ({ value, count: counts[value] || 0, index }))
-      .sort((a, b) => b.count - a.count || a.index - b.index)[0]?.value ||
+      .map((value, index) => ({ value, count: counts[value] || 0, lastSeen: lastSeen[value] ?? -1, index }))
+      .sort((a, b) => b.count - a.count || b.lastSeen - a.lastSeen || a.index - b.index)[0]?.value ||
       allowed[0] || null;
   }
 
@@ -334,8 +349,10 @@
       recentRate < previousRate - 0.15;
 
     return {
-      total: recent.length,
-      hits: totalHits,
+      total: rows.length,
+      evaluatedRecent: recent.length,
+      hits: rows.filter(row => row.acertou).length,
+      recentHits: totalHits,
       score,
       percentage: Math.round(score * 100),
       recentRate,
@@ -410,22 +427,33 @@
     return result;
   }
 
+  // Hipótese exata descritiva: frequências normalizadas em janelas de 10/30/50/100.
+  // Isso não significa que o número tenha probabilidade maior no próximo giro.
   function makeForecast(history) {
     const numbers = normalizeHistory(history);
-
     if (numbers.length < 10) return null;
-
-    const counts = countValues(numbers.slice(-30));
-
-    const number = Object.keys(counts)
-      .map(Number)
-      .sort((a, b) => counts[b] - counts[a] || a - b)[0];
-
+    const windows = [
+      { size: 10, weight: 0.10 }, { size: 30, weight: 0.20 },
+      { size: 50, weight: 0.30 }, { size: 100, weight: 0.40 }
+    ].filter(w => numbers.length >= w.size);
+    const scores = Array.from({ length: 37 }, (_, number) => ({ number, score: 0, lastSeen: -1 }));
+    const weightTotal = windows.reduce((sum, window) => sum + window.weight, 0);
+    numbers.forEach((n, index) => { scores[n].lastSeen = index; });
+    for (const window of windows) {
+      const sample = numbers.slice(-window.size);
+      const counts = countValues(sample.map(String));
+      for (const item of scores) {
+        item.score += ((counts[String(item.number)] || 0) / sample.length) * (window.weight / weightTotal);
+      }
+    }
+    scores.sort((a, b) => b.score - a.score || b.lastSeen - a.lastSeen || a.number - b.number);
+    const number = scores[0]?.number;
     if (number === undefined) return null;
-
     return {
       base: numbers[numbers.length - 1],
       number,
+      candidates: scores.slice(0, 5).map(item => item.number),
+      method: `Frequência combinada (${windows.map(w => w.size).join("/")})`,
       color: colorOf(number),
       range: rangeOf(number),
       parity: parityOf(number)
@@ -511,6 +539,8 @@
     rangeOf,
     columnOf,
     lineOf,
+    dozenOf,
+    streetOf,
     categoryOf,
     labelOf,
     valuesFor,

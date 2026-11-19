@@ -1,4 +1,4 @@
-# MASTER PRO AI (v3.0)
+# MASTER PRO AI (v4.0)
 
 App web mobile-first para registrar resultados de roleta europeia (0–36), consultar o histórico no Supabase e acompanhar análises estatísticas retrospectivas.
 
@@ -28,12 +28,21 @@ O app usa a tabela existente `historico_analise` (colunas `numero`, `session_id`
 
 Execute `supabase/setup-aprendizado.sql` no SQL Editor. Ele é seguro de rodar mais de uma vez e cria `aprendizado_modelo` e `aprendizado_estrategias` (esta última era usada pelo app mas faltava no SQL antigo). Se a tabela de aprendizado não existir, o app continua funcionando e mostra um aviso.
 
+### Mudanças da v4.0
+
+- Roleta europeia: categorias de cor, paridade, faixa, coluna, dúzia e rua (12 grupos de 3 números).
+- A antiga categoria "linha" fica como legado e não é misturada com as novas ruas; os registros antigos permanecem no banco.
+- Seleção de estratégia só é liberada após 100 avaliações históricas. A pontuação usa as 30 avaliações mais recentes, mas o mínimo é contado sobre todo o histórico carregado.
+- Desempate de frequência usa a ocorrência mais recente, evitando favorecer sempre a primeira opção da lista.
+- Hipótese de número exato combina frequências normalizadas das janelas disponíveis entre 10, 30, 50 e 100 giros; mostra até cinco candidatos. É análise descritiva, não vantagem probabilística.
+- Não há migração destrutiva nem alteração no histórico de giros. O SQL atual não precisa ser executado novamente para aceitar as categorias novas, pois `categoria` é texto sem restrição de valores.
+
 ### Mudanças da v3.0
 
 - Corrigido: tabela `aprendizado_estrategias` ausente derrubava o carregamento do histórico.
 - O histórico agora carrega só os 500 giros mais recentes + contagem exata, em vez de baixar a tabela inteira (e sem paginação instável).
 - "Mais frequentes / atrasados" agora usam de fato os **últimos 100** giros, e as barras são proporcionais.
-- Categoria "Linha" (4 grupos de 9, que não existe na roleta) trocada por **Dúzia** (1–12, 13–24, 25–36).
+- A versão anterior documentava Dúzia, enquanto o código entregue ainda usava Linha. A v4.0 padroniza Dúzia e Rua separadamente.
 - Estratégia "alternância" só vale para sequências com exatamente dois valores; "quebra" nunca sugere zero.
 - Mínimo de avaliações para uma estratégia ser considerada subiu de 8 para 20.
 - Só existe uma hipótese numérica pendente por sessão (sem linhas duplicadas).
